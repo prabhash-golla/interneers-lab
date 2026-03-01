@@ -1,12 +1,9 @@
 from django.contrib import admin
 from django.urls import path
-from django.http import JsonResponse
-
-def hello_world(request):
-    name = request.GET.get("name", "World")
-    return JsonResponse({"message": f"Hello, {name}!"})
+from .views import product_list_controller, product_detail_controller
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('hello/', hello_world),
+    path('api/v1/products/', product_list_controller),
+    path('api/v1/products/<str:product_id>/', product_detail_controller),
 ]
