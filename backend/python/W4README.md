@@ -1,9 +1,9 @@
-## 📌 Overview
+## Overview
 This repository contains the backend service for an "AI-Powered Inventory Management System" built during the Interneers Lab 2026. 
 
 As of **Week 4**, the project has evolved from a simple in-memory script to a robust, database-backed web service. It utilizes **Django** for the web framework but strictly adheres to a **Controller-Service-Repository (Hexagonal)** architecture. Data persistence is handled via **MongoDB** and the **MongoEngine** ORM, completely bypassing Django's default relational ORM to support flexible document-based storage.
 
-## 🏗️ Architecture & Implementation
+## Architecture & Implementation
 To ensure the application remains scalable, easily testable, and ready for AI integration, the codebase cleanly isolates concerns:
 
 1. **Domain/Service Layer (`services.py`):** Contains pure Python business logic, input validation rules, and bulk processing scripts (like CSV uploads). It has no dependencies on Django web requests.
@@ -22,7 +22,7 @@ To ensure the application remains scalable, easily testable, and ready for AI in
 
 ---
 
-## 🚀 Developer Guide
+## Developer Guide
 
 ### Prerequisites
 * **Python:** 3.12 or higher (3.14 recommended)
