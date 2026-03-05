@@ -2,6 +2,7 @@ import json
 import csv
 import io
 from .repository import ProductRepository,ProductCategoryRepository
+from mongoengine.errors import ValidationError as MongoValidationError
 
 class ValidationError(Exception):
     pass
@@ -70,11 +71,9 @@ def create_product(data: dict) -> dict:
     data['category'] = category_obj
 
     try:
-        # 3. Save safely
         product = ProductRepository.create(data)
         return format_product(product)
-    except ValidationError as e:
-        # 4. Catch the specific MongoEngine error
+    except MongoValidationError as e:
         raise ValidationError(f"Database validation failed: {str(e)}")
 
 def get_product(product_id: str) -> dict:
