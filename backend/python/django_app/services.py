@@ -56,7 +56,6 @@ def validate_product_data(data: dict):
         raise ValidationError("Product 'quantity' must be a valid integer.")
 
 def format_product(product) -> dict:
-    """Helper to convert the MongoEngine database object back into a standard dictionary."""
     data = json.loads(product.to_json())
     data['id'] = data.pop('_id', {}).get('$oid', str(product.id))
     return data
@@ -64,8 +63,19 @@ def format_product(product) -> dict:
 def create_product(data: dict) -> dict:
     validate_product_data(data)
     
-    product = ProductRepository.create(data)
-    return format_product(product)
+    category_name = data.get('category')
+    category_obj = ProductCategoryRepository.get_by_name(category_name)
+    if not category_obj:
+        raise ValidationError(f"Category '{category_name}' does not exist.")
+    data['category'] = category_obj
+
+    try:
+        # 3. Save safely
+        product = ProductRepository.create(data)
+        return format_product(product)
+    except ValidationError as e:
+        # 4. Catch the specific MongoEngine error
+        raise ValidationError(f"Database validation failed: {str(e)}")
 
 def get_product(product_id: str) -> dict:
     product = ProductRepository.get_by_id(product_id)
@@ -74,6 +84,8 @@ def get_product(product_id: str) -> dict:
     return format_product(product)
 
 def list_products(page: int = 1, limit: int = 10) -> dict:
+    page = max(1, page)
+    limit = max(1, limit)
     skip = (page - 1) * limit
     
     products = ProductRepository.get_all(skip=skip, limit=limit)
