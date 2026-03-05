@@ -18,6 +18,13 @@ class ProductCategoryRepository:
             return None
 
     @staticmethod
+    def get_by_name(name: str) -> ProductCategory:
+        try:
+            return ProductCategory.objects.get(title__iexact=name)
+        except DoesNotExist:
+            return None 
+
+    @staticmethod
     def get_all():
         return ProductCategory.objects.all()
 
