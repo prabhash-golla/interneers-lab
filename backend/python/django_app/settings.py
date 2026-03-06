@@ -69,18 +69,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "django_app.wsgi.application"
 
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
-
-
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
@@ -121,3 +109,22 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+import os
+from mongoengine import connect
+
+MONGO_USER = os.getenv("MONGO_USER", "root")
+MONGO_PASS = os.getenv("MONGO_PASS", "example")
+MONGO_PORT = os.getenv("MONGO_PORT", "27019")
+MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
+
+connect(
+    db="inventory_db",
+    username=MONGO_USER,
+    password=MONGO_PASS,
+    host=MONGO_HOST,
+    port=int(MONGO_PORT),
+    authentication_source="admin"
+)
+
+DATABASES = {}

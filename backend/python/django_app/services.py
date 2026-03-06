@@ -1,18 +1,5 @@
-import uuid
-from dataclasses import dataclass, asdict
-from typing import Dict
-
-@dataclass
-class Product:
-    id: str
-    name: str
-    description: str
-    category: str
-    price: float
-    brand: str
-    quantity: int
-
-PRODUCTS_DB: Dict[str, Product] = {}
+import json
+from .repository import ProductRepository
 
 class ValidationError(Exception):
     pass
@@ -41,39 +28,32 @@ def validate_product_data(data: dict):
     except ValueError:
         raise ValidationError("Product 'quantity' must be a valid integer.")
 
+def format_product(product) -> dict:
+    """Helper to convert the MongoEngine database object back into a standard dictionary."""
+    data = json.loads(product.to_json())
+    data['id'] = data.pop('_id', {}).get('$oid', str(product.id))
+    return data
+
 def create_product(data: dict) -> dict:
     validate_product_data(data)
     
-    product_id = str(uuid.uuid4())
-    new_product = Product(
-        id=product_id,
-        name=data["name"],
-        description=data.get("description", ""),
-        category=data.get("category", "Uncategorized"),
-        price=float(data["price"]),
-        brand=data["brand"],
-        quantity=int(data["quantity"])
-    )
-    
-    PRODUCTS_DB[product_id] = new_product
-    return asdict(new_product)
+    product = ProductRepository.create(data)
+    return format_product(product)
 
 def get_product(product_id: str) -> dict:
-    product = PRODUCTS_DB.get(product_id)
+    product = ProductRepository.get_by_id(product_id)
     if not product:
         raise NotFoundError(f"Product with ID '{product_id}' not found.")
-    return asdict(product)
+    return format_product(product)
 
 def list_products(page: int = 1, limit: int = 10) -> dict:
-    all_products = list(PRODUCTS_DB.values())
-    total_items = len(all_products)
-    start_idx = (page - 1) * limit
-    end_idx = start_idx + limit
+    skip = (page - 1) * limit
     
-    paginated_products = all_products[start_idx:end_idx]
+    products = ProductRepository.get_all(skip=skip, limit=limit)
+    total_items = ProductRepository.count_all()
     
     return {
-        "items": [asdict(p) for p in paginated_products],
+        "items": [format_product(p) for p in products],
         "total": total_items,
         "page": page,
         "limit": limit,
@@ -81,27 +61,19 @@ def list_products(page: int = 1, limit: int = 10) -> dict:
     }
 
 def update_product(product_id: str, data: dict) -> dict:
-    if product_id not in PRODUCTS_DB:
+    product = ProductRepository.get_by_id(product_id)
+    if not product:
         raise NotFoundError(f"Product with ID '{product_id}' not found.")
     
     validate_product_data(data)
     
-    updated_product = Product(
-        id=product_id,
-        name=data["name"],
-        description=data.get("description", ""),
-        category=data.get("category", "Uncategorized"),
-        price=float(data["price"]),
-        brand=data["brand"],
-        quantity=int(data["quantity"])
-    )
-    
-    PRODUCTS_DB[product_id] = updated_product
-    return asdict(updated_product)
+    updated_product = ProductRepository.update(product, data)
+    return format_product(updated_product)
 
 def delete_product(product_id: str) -> dict:
-    if product_id not in PRODUCTS_DB:
+    product = ProductRepository.get_by_id(product_id)
+    if not product:
         raise NotFoundError(f"Product with ID '{product_id}' not found.")
     
-    del PRODUCTS_DB[product_id]
+    ProductRepository.delete(product)
     return {"message": f"Product '{product_id}' deleted successfully."}
