@@ -1,11 +1,39 @@
 import json
-from .repository import ProductRepository
+import csv
+import io
+from .repository import ProductRepository,ProductCategoryRepository
+from mongoengine.errors import ValidationError as MongoValidationError
 
 class ValidationError(Exception):
     pass
 
 class NotFoundError(Exception):
     pass
+
+def create_category(data: dict) -> dict:
+    if not data.get("title") or not str(data["title"]).strip():
+        raise ValidationError("Category 'title' is required.")
+    
+    category = ProductCategoryRepository.create(data)
+    return format_product(category) 
+
+def list_categories() -> list:
+    categories = ProductCategoryRepository.get_all()
+    return [format_product(c) for c in categories]
+
+def get_category(category_id: str) -> dict:
+    category = ProductCategoryRepository.get_by_id(category_id)
+    if not category:
+        raise NotFoundError(f"Category '{category_id}' not found.")
+    return format_product(category)
+
+def delete_category(category_id: str) -> dict:
+    category = ProductCategoryRepository.get_by_id(category_id)
+    if not category:
+        raise NotFoundError(f"Category '{category_id}' not found.")
+    
+    ProductCategoryRepository.delete(category)
+    return {"message": "Category deleted successfully."}
 
 def validate_product_data(data: dict):
 
@@ -29,7 +57,6 @@ def validate_product_data(data: dict):
         raise ValidationError("Product 'quantity' must be a valid integer.")
 
 def format_product(product) -> dict:
-    """Helper to convert the MongoEngine database object back into a standard dictionary."""
     data = json.loads(product.to_json())
     data['id'] = data.pop('_id', {}).get('$oid', str(product.id))
     return data
@@ -37,8 +64,17 @@ def format_product(product) -> dict:
 def create_product(data: dict) -> dict:
     validate_product_data(data)
     
-    product = ProductRepository.create(data)
-    return format_product(product)
+    category_name = data.get('category')
+    category_obj = ProductCategoryRepository.get_by_name(category_name)
+    if not category_obj:
+        raise ValidationError(f"Category '{category_name}' does not exist.")
+    data['category'] = category_obj
+
+    try:
+        product = ProductRepository.create(data)
+        return format_product(product)
+    except MongoValidationError as e:
+        raise ValidationError(f"Database validation failed: {str(e)}")
 
 def get_product(product_id: str) -> dict:
     product = ProductRepository.get_by_id(product_id)
@@ -47,6 +83,8 @@ def get_product(product_id: str) -> dict:
     return format_product(product)
 
 def list_products(page: int = 1, limit: int = 10) -> dict:
+    page = max(1, page)
+    limit = max(1, limit)
     skip = (page - 1) * limit
     
     products = ProductRepository.get_all(skip=skip, limit=limit)
@@ -77,3 +115,60 @@ def delete_product(product_id: str) -> dict:
     
     ProductRepository.delete(product)
     return {"message": f"Product '{product_id}' deleted successfully."}
+
+def list_products_by_category(category_id: str) -> list:
+    category = ProductCategoryRepository.get_by_id(category_id)
+    if not category:
+        raise NotFoundError(f"Category '{category_id}' not found.")
+        
+    products = ProductRepository.get_by_category(category)
+    return [format_product(p) for p in products]
+
+def assign_category_to_product(product_id: str, category_id: str) -> dict:
+    product = ProductRepository.get_by_id(product_id)
+    if not product:
+        raise NotFoundError(f"Product '{product_id}' not found.")
+        
+    category = ProductCategoryRepository.get_by_id(category_id)
+    if not category:
+        raise NotFoundError(f"Category '{category_id}' not found.")
+        
+    updated_product = ProductRepository.update(product, {"category": category})
+    return format_product(updated_product)
+
+def remove_category_from_product(product_id: str) -> dict:
+    product = ProductRepository.get_by_id(product_id)
+    if not product:
+        raise NotFoundError(f"Product '{product_id}' not found.")
+        
+    updated_product = ProductRepository.update(product, {"category": None})
+    return format_product(updated_product)
+
+def bulk_create_products_from_csv(file_obj) -> dict:
+    decoded_file = file_obj.read().decode('utf-8')
+    io_string = io.StringIO(decoded_file)
+    reader = csv.DictReader(io_string)
+    
+    created_count = 0
+    errors = []
+    
+    for row_num, row in enumerate(reader, start=1):
+        try:
+            # Ensure price and quantity are correctly typed before validation
+            row['price'] = float(row.get('price', 0))
+            row['quantity'] = int(row.get('quantity', 0))
+            
+            # Use your existing validation logic
+            validate_product_data(row)
+            
+            # Save to DB
+            ProductRepository.create(row)
+            created_count += 1
+            
+        except Exception as e:
+            errors.append(f"Row {row_num} failed: {str(e)}")
+            
+    return {
+        "message": f"Successfully created {created_count} products.",
+        "errors": errors
+    }
