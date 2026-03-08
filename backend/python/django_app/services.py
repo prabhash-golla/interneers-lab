@@ -154,14 +154,9 @@ def bulk_create_products_from_csv(file_obj) -> dict:
     
     for row_num, row in enumerate(reader, start=1):
         try:
-            # Ensure price and quantity are correctly typed before validation
             row['price'] = float(row.get('price', 0))
             row['quantity'] = int(row.get('quantity', 0))
-            
-            # Use your existing validation logic
             validate_product_data(row)
-            
-            # Save to DB
             ProductRepository.create(row)
             created_count += 1
             
