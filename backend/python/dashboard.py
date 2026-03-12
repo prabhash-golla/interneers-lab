@@ -6,6 +6,21 @@ from mongoengine import connect
 from mongoengine.errors import DoesNotExist
 from django_app.models import Product, ProductCategory
 
+from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
+
+class SyntheticProduct(BaseModel):
+    name: str = Field(description="The name of the product")
+    description: str = Field(description="A short 1-sentence description")
+    category: str = Field(description="A broad category like 'Electronics', 'Toys', or 'Apparel'")
+    price: float = Field(description="Retail price between 5.00 and 200.00")
+    brand: str = Field(description="The manufacturer name")
+    quantity: int = Field(description="Stock quantity (make this very high for rush scenarios, e.g., 200-1000)")
+
+class ProductList(BaseModel):
+    products: list[SyntheticProduct]
+
 load_dotenv()
 connect(
     db="inventory_db",
@@ -99,3 +114,63 @@ with col2:
                     st.rerun()
         else:
             st.write("No products to remove.")
+
+st.markdown("---")
+st.header("AI Warehouse Simulator")
+st.write("Use AI to generate synthetic inventory data based on real-world business scenarios.")
+
+
+scenarios = {
+    "Holiday Rush": "Generate 5 high-demand holiday gift items (electronics and toys). Stock levels should be massive (500+).",
+    "Summer Sale": "Generate 5 summer outdoor and sports products. Stock levels should be high (300+).",
+    "Back to School": "Generate 5 stationery and student tech products. Stock levels should be moderate to high (200+)."
+}
+
+if 'simulation_success' in st.session_state:
+    st.success(st.session_state['simulation_success'])
+    st.balloons()
+    
+    del st.session_state['simulation_success']
+
+selected_scenario = st.selectbox("Choose a Simulation Scenario:", list(scenarios.keys()))
+
+if st.button(f"Simulate '{selected_scenario}'"):
+    with st.spinner("AI is generating and validating synthetic inventory..."):
+        try:
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+            
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=scenarios[selected_scenario],
+                config=types.GenerateContentConfig(
+                    temperature=0.8,
+                    response_mime_type="application/json",
+                    response_schema=ProductList,
+                )
+            )
+            validated_data = ProductList.model_validate_json(response.text)
+            saved_count = 0
+            for p in validated_data.products:
+                cat_obj = ProductCategory.objects(title=p.category).first()
+                if not cat_obj:
+                    cat_obj = ProductCategory(title=p.category, description="AI Generated Scenario Category")
+                    cat_obj.save()
+
+                new_product = Product(
+                    name=p.name,
+                    description=p.description,
+                    category=cat_obj,
+                    price=p.price,
+                    brand=p.brand,
+                    quantity=p.quantity
+                )
+                new_product.save()
+                saved_count += 1
+                
+            st.session_state['simulation_success'] = f"Successfully simulated '{selected_scenario}'! Added {saved_count} new products."
+            
+            fetch_inventory.clear()
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"An error occurred during simulation: {str(e)}")
