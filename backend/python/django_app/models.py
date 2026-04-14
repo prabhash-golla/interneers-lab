@@ -1,6 +1,6 @@
 # django_app/models.py
 import datetime
-from mongoengine import Document, StringField, FloatField, IntField, DateTimeField ,ReferenceField
+from mongoengine import Document, StringField, FloatField, IntField, DateTimeField ,ReferenceField ,ListField
 
 class ProductCategory(Document):
     title = StringField(required=True, unique=True)
@@ -24,6 +24,8 @@ class Product(Document):
     price = FloatField(required=True, min_value=0.01)
     brand = StringField(required=True)
     quantity = IntField(required=True, min_value=0)
+
+    embedding = ListField(FloatField(), default=list)
     
     # Advanced Goal: Audit Columns
     created_at = DateTimeField(default=datetime.datetime.utcnow)
