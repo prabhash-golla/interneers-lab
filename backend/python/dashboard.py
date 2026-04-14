@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 from mongoengine import connect
 from mongoengine.errors import DoesNotExist
 from django_app.models import Product, ProductCategory
-
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -50,13 +52,19 @@ def fetch_inventory():
             "Brand": p.brand,
             "Category": cat_title,
             "Price ($)": p.price,
-            "Quantity": p.quantity
+            "Quantity": p.quantity,
+            "Embedding": p.embedding
         })
     return pd.DataFrame(data)
 
 def fetch_categories():
     return [cat.title for cat in ProductCategory.objects.all()]
 
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer('all-MiniLM-L6-v2')
+
+embedding_model = load_embedding_model()
 df = fetch_inventory()
 categories = fetch_categories()
 
@@ -74,7 +82,26 @@ if not df.empty:
     if not low_stock_items.empty:
         st.error(f"Alert: {len(low_stock_items)} item(s) are running critically low on stock!")
         st.dataframe(low_stock_items.style.highlight_max(subset=['Quantity'], color='red'))
-    
+
+    st.subheader("Search")
+    search_query = st.text_input("Describe what you are looking for :")
+
+    if search_query and not df.empty:
+        with st.spinner("Searching for meaning..."):
+            query_vector = embedding_model.encode([search_query])
+            
+            df_embedded = df[df['Embedding'].apply(lambda x: isinstance(x, list) and len(x) > 0)].copy()
+            
+            if not df_embedded.empty:
+                db_vectors = list(df_embedded['Embedding'])
+                scores = cosine_similarity(query_vector, db_vectors)[0]
+                
+                df_embedded['Match Score'] = np.round(scores, 2)
+                df = df_embedded[df_embedded['Match Score'] > 0.2].sort_values(by='Match Score', ascending=False)
+            else:
+                st.warning("No embedded products found. Run your Jupyter script to generate them!")
+    if 'Embedding' in df.columns:
+        df = df.drop(columns=['Embedding'])
     st.dataframe(df, width='stretch')
 else:
     st.info("No products found in the database.")
